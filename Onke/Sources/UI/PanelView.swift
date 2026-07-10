@@ -8,16 +8,46 @@ import SwiftUI
 /// the whole point of the app.
 struct PanelView: View {
     @ObservedObject var engine: MetricsEngine
+    @ObservedObject var settings: AppSettings
+
+    /// Invoked by the gear button. Injected so the view stays decoupled from AppKit.
+    var onOpenSettings: () -> Void = {}
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: settings.collapsed ? 4 : 10) {
+            header
             wattsHeadline
-            batteryRow
-            statusLine
+            if !settings.collapsed {
+                batteryRow
+                timeRow
+                statusLine
+            }
         }
-        .padding(16)
-        .frame(width: 260, alignment: .leading)
+        .padding(settings.collapsed ? 10 : 16)
+        .frame(width: settings.collapsed ? 150 : 260, alignment: .leading)
         .background(.ultraThinMaterial)
+        .opacity(settings.panelOpacity)
+    }
+
+    // MARK: Header (gear + collapse)
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Spacer()
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { settings.collapsed.toggle() }
+            } label: {
+                Image(systemName: settings.collapsed
+                      ? "arrow.up.left.and.arrow.down.right"
+                      : "arrow.down.right.and.arrow.up.left")
+            }
+            .help(settings.collapsed ? "Expand" : "Collapse")
+            Button(action: onOpenSettings) { Image(systemName: "gearshape") }
+                .help("Settings")
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .font(.caption)
     }
 
     // MARK: Sections
@@ -48,6 +78,24 @@ struct PanelView: View {
                 Text("\(Int(s.percentage.rounded()))%")
                     .font(.headline)
                     .monospacedDigit()
+                Spacer(minLength: 8)
+                Text(rateText)
+                    .font(.subheadline)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder private var timeRow: some View {
+        if let s = engine.sample, s.hasBattery {
+            HStack(spacing: 6) {
+                Image(systemName: "clock")
+                    .foregroundStyle(.secondary)
+                Text(timeRemainingText)
+                    .font(.subheadline)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -78,6 +126,26 @@ struct PanelView: View {
         String(format: "%+.1f W", watts)
     }
 
+    /// Smoothed rate as "±N %/hr", or "calculating…" while the window warms up.
+    private var rateText: String {
+        guard let rate = engine.rate.ratePercentPerHour else { return "calculating…" }
+        return String(format: "%+.0f %%/hr", rate)
+    }
+
+    /// Time-to-empty or time-to-full, whichever applies, as "Nh Mm left / to full".
+    /// Shows "calculating…" until warm, or "—" when a finite time doesn't apply
+    /// (e.g. full on AC with amperage ~0).
+    private var timeRemainingText: String {
+        guard engine.rate.isWarmedUp else { return "calculating…" }
+        guard let seconds = engine.rate.timeRemaining else { return "—" }
+        let total = Int(seconds)
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        let clock = h > 0 ? "\(h)h \(m)m" : "\(m)m"
+        let charging = engine.sample?.isEffectivelyCharging ?? false
+        return charging ? "\(clock) to full" : "\(clock) left"
+    }
+
     /// Green when effectively charging, amber when plugged-but-draining, red when on
     /// battery. The amber case is the weak-powerbank warning and must read loudly.
     private func wattsColor(_ s: PowerSample) -> Color {
@@ -103,12 +171,35 @@ struct PanelView: View {
     }
 }
 
+#if DEBUG
+/// A trivial preview-only provider that emits one fixed sample. The full scripted fake
+/// lives in the test target; previews just need static states to render against.
+private final class PreviewPowerSource: PowerSourceProviding {
+    let latest: PowerSample?
+    init(_ sample: PowerSample) { latest = sample }
+    func start(interval: TimeInterval, onSample: @escaping (PowerSample) -> Void) {
+        if let latest { onSample(latest) }
+    }
+    func stop() {}
+}
+
+private func previewSample(amps: Double, external: Bool) -> PowerSample {
+    PowerSample(timestamp: Date(), hasBattery: true, percentage: 62,
+                amperageMilliAmps: amps, voltageMilliVolts: 12_600,
+                externalConnected: external, osReportsCharging: external)
+}
+
 #Preview("Discharging") {
-    let engine = MetricsEngine(provider: FakePowerSource(scenario: .discharge))
-    PanelView(engine: engine).onAppear { engine.start() }
+    let engine = MetricsEngine(
+        provider: PreviewPowerSource(previewSample(amps: -1800, external: false)))
+    PanelView(engine: engine, settings: AppSettings(defaults: UserDefaults(suiteName: "preview")!))
+        .onAppear { engine.start() }
 }
 
 #Preview("Weak powerbank") {
-    let engine = MetricsEngine(provider: FakePowerSource(scenario: .weakPowerbank))
-    PanelView(engine: engine).onAppear { engine.start() }
+    let engine = MetricsEngine(
+        provider: PreviewPowerSource(previewSample(amps: -400, external: true)))
+    PanelView(engine: engine, settings: AppSettings(defaults: UserDefaults(suiteName: "preview")!))
+        .onAppear { engine.start() }
 }
+#endif

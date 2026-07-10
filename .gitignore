@@ -23,6 +23,10 @@ xcuserdata/
 .build/
 .swiftpm/
 
+# Code coverage artifacts
+*.profraw
+*.profdata
+
 # CocoaPods / Carthage (not used, but ignore if ever added)
 Pods/
 Carthage/Build/

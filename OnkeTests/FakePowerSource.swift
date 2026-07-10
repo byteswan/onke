@@ -1,4 +1,5 @@
 import Foundation
+@testable import Onke
 
 /// A scripted `PowerSourceProviding` for previews, demo mode, and notification testing.
 ///

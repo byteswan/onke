@@ -3,33 +3,49 @@ import Combine
 
 /// The observable bridge between a `PowerSourceProviding` and the SwiftUI panel.
 ///
-/// For this first vertical slice it owns a provider, starts sampling, and republishes the
-/// latest ``PowerSample`` for the UI to render. Rolling-window rate/time-remaining
-/// (spec §5.1) and the notification engine (spec §5.3) slot in here later — this type is
-/// the single place that turns raw samples into everything the app shows.
+/// It owns a provider, starts sampling, and turns each raw ``PowerSample`` into the
+/// derived state the app shows: the sample itself plus the smoothed rate / time-remaining
+/// from ``RateEstimator``. This is the single place raw samples become everything the UI
+/// and (later) the notification engine consume.
 @MainActor
 final class MetricsEngine: ObservableObject {
 
     /// Most recent reading, or `nil` before the first sample arrives.
     @Published private(set) var sample: PowerSample?
 
+    /// Smoothed rate / time-remaining derived from the rolling window.
+    @Published private(set) var rate: RateEstimator.Output =
+        RateEstimator.Output(ratePercentPerHour: nil, timeRemaining: nil, isWarmedUp: false)
+
     private let provider: PowerSourceProviding
     private let interval: TimeInterval
+    private var estimator: RateEstimator
+
+    /// Fires on every new sample, after `sample`/`rate` have been updated. The
+    /// notification engine subscribes here.
+    let didSample = PassthroughSubject<(PowerSample, RateEstimator.Output), Never>()
 
     init(provider: PowerSourceProviding, interval: TimeInterval = 5) {
         self.provider = provider
         self.interval = interval
+        self.estimator = RateEstimator(expectedInterval: interval)
     }
 
     func start() {
         provider.start(interval: interval) { [weak self] sample in
-            // FakePowerSource already delivers on the main queue; hop to the main actor
-            // to satisfy isolation and stay correct for other providers.
-            Task { @MainActor in self?.sample = sample }
+            // Providers may deliver off the main queue; hop to the main actor.
+            Task { @MainActor in self?.handle(sample) }
         }
     }
 
     func stop() {
         provider.stop()
+    }
+
+    private func handle(_ sample: PowerSample) {
+        let output = estimator.ingest(sample)
+        self.sample = sample
+        self.rate = output
+        didSample.send((sample, output))
     }
 }

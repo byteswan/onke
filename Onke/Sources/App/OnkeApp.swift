@@ -10,7 +10,7 @@ struct OnkeApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarContent(engine: appDelegate.engine)
+            MenuBarContent(engine: appDelegate.engine) { appDelegate.openSettings() }
         } label: {
             // Battery % as a secondary affordance in the menu bar.
             if let s = appDelegate.engine.sample, s.hasBattery {
@@ -22,10 +22,10 @@ struct OnkeApp: App {
     }
 }
 
-/// The menu bar dropdown: a compact status readout plus lifecycle actions. Settings is a
-/// placeholder for now (spec §5.4 lands in a later pass).
+/// The menu bar dropdown: a compact status readout plus lifecycle actions.
 private struct MenuBarContent: View {
     @ObservedObject var engine: MetricsEngine
+    var onOpenSettings: () -> Void
 
     var body: some View {
         if let s = engine.sample, s.hasBattery {
@@ -34,6 +34,8 @@ private struct MenuBarContent: View {
             Text("No battery detected")
         }
         Divider()
+        Button("Settings…") { onOpenSettings() }
+            .keyboardShortcut(",")
         Button("Quit Onke") { NSApplication.shared.terminate(nil) }
             .keyboardShortcut("q")
     }
