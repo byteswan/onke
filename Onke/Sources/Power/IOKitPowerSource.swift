@@ -60,7 +60,9 @@ final class IOKitPowerSource: PowerSourceProviding {
             amperageMilliAmps: battery.amperage ?? 0,
             voltageMilliVolts: battery.voltage ?? 0,
             externalConnected: ps.externalConnected,
-            osReportsCharging: ps.osReportsCharging
+            osReportsCharging: ps.osReportsCharging,
+            systemInWatts: battery.systemInWatts,
+            systemLoadWatts: battery.systemLoadWatts
         )
     }
 
@@ -105,8 +107,10 @@ final class IOKitPowerSource: PowerSourceProviding {
     // MARK: AppleSmartBattery (signed amperage / voltage)
 
     private struct SmartBattery {
-        var amperage: Double?   // mA, signed (negative = discharging)
-        var voltage: Double?    // mV
+        var amperage: Double?        // mA, signed (negative = discharging)
+        var voltage: Double?         // mV
+        var systemInWatts: Double?   // W from the external source (telemetry)
+        var systemLoadWatts: Double? // W the system is consuming (telemetry)
     }
 
     private static func readSmartBattery() -> SmartBattery {
@@ -132,6 +136,17 @@ final class IOKitPowerSource: PowerSourceProviding {
         }
         if let volt = dict["Voltage"] as? Int64 {
             out.voltage = Double(volt)
+        }
+        // Apple Silicon exposes a live power breakdown: SystemPowerIn (mW from the
+        // adapter) and SystemLoad (mW the system draws). Absent on Intel — leave nil
+        // and the UI hides the in/out split.
+        if let telemetry = dict["PowerTelemetryData"] as? [String: Any] {
+            if let sysIn = telemetry["SystemPowerIn"] as? Int64 {
+                out.systemInWatts = Double(sysIn) / 1000.0
+            }
+            if let load = telemetry["SystemLoad"] as? Int64 {
+                out.systemLoadWatts = Double(load) / 1000.0
+            }
         }
         return out
     }

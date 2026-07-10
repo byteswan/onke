@@ -40,17 +40,20 @@ final class DemoPowerSource: PowerSourceProviding {
         emit()
     }
 
-    /// A single phase's electrical state.
-    private struct Phase { var amps: Double; var external: Bool; var osCharging: Bool }
+    /// A single phase's electrical state. `inWatts` is what the external source
+    /// delivers; system load is derived so the energy balance holds (in − load = net).
+    private struct Phase {
+        var amps: Double; var external: Bool; var osCharging: Bool; var inWatts: Double
+    }
 
     /// Timeline that walks through: fast discharge (level warnings + time-low), a weak
     /// powerbank (amber + rule #3), then a healthy charge to full (unplug-at-full).
     /// Percentages are exaggerated by the drift math so crossings happen quickly.
     private func phase(at t: TimeInterval) -> Phase {
         switch t {
-        case ..<120:  return Phase(amps: -4500, external: false, osCharging: false) // steep drain
-        case ..<180:  return Phase(amps: -600,  external: true,  osCharging: true)  // weak brick
-        default:      return Phase(amps: 3500,  external: true,  osCharging: true)  // real charge
+        case ..<120:  return Phase(amps: -4500, external: false, osCharging: false, inWatts: 0)  // steep drain
+        case ..<180:  return Phase(amps: -600,  external: true,  osCharging: true,  inWatts: 20) // weak brick
+        default:      return Phase(amps: 3500,  external: true,  osCharging: true,  inWatts: 60) // real charge
         }
     }
 
@@ -60,6 +63,7 @@ final class DemoPowerSource: PowerSourceProviding {
         let deltaPercent = (p.amps * (interval / 3600.0)) / 2000.0 * 100.0
         percentage = min(100, max(0, percentage + deltaPercent))
 
+        let netWatts = p.amps * 12_600 / 1_000_000.0
         let sample = PowerSample(
             timestamp: Date(),
             hasBattery: true,
@@ -67,7 +71,9 @@ final class DemoPowerSource: PowerSourceProviding {
             amperageMilliAmps: p.amps,
             voltageMilliVolts: 12_600,
             externalConnected: p.external,
-            osReportsCharging: p.osCharging)
+            osReportsCharging: p.osCharging,
+            systemInWatts: p.inWatts,
+            systemLoadWatts: p.inWatts - netWatts)
         latest = sample
         onSample?(sample)
     }

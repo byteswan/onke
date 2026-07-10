@@ -1,8 +1,25 @@
 # Spec: macOS Battery Dashboard (working title: Onke)
 
+> **Implementation note (as-built).** All three phases are implemented. Two deviations
+> from the original text below, made during the build:
+> 1. **Normal window instead of a floating panel.** The UI is a standard resizable-off
+>    macOS `Window` (dock icon, macOS-restored position) with an in-window settings pane
+>    and a menu bar extra — not the non-activating `NSPanel` described in §5.2. Closing
+>    the window keeps monitoring alive in the menu bar.
+> 2. **Two additions:** a live **in/out power breakdown** on the hero card (from
+>    `AppleSmartBattery` `PowerTelemetryData`, Apple Silicon), and a **Power history**
+>    screen tracking energy in vs. out per *clock* hour, persisted in UserDefaults
+>    (48-hour ring). This supersedes the "no historical persistence" non-goal in §2.
+>
+> Where the prose below still says "panel" or "floating", read it as the main window.
+
 ## 1. Purpose
 
-A native macOS menu-less desktop app that shows live battery/power state in an always-on floating window, attributes drain to apps, and fires local notifications for power-relevant events. Built for laptop use away from wall power, often on USB-C powerbanks. Key insight: macOS's "charging" flag lies on weak powerbanks — the source of truth is **net wattage** (signed battery amperage × voltage). The dashboard is built around that number.
+A native macOS desktop app that shows live battery/power state in a normal window,
+attributes drain to apps, and fires local notifications for power-relevant events. Built
+for laptop use away from wall power, often on USB-C powerbanks. Key insight: macOS's
+"charging" flag lies on weak powerbanks — the source of truth is **net wattage** (signed
+battery amperage × voltage). The dashboard is built around that number.
 
 ## 2. Constraints & Non-Goals
 

@@ -1,9 +1,9 @@
 import SwiftUI
 import ServiceManagement
 
-/// The settings Form (spec §5.4): sampling interval, notification thresholds, panel
-/// appearance, and launch-at-login. Binds directly to ``AppSettings`` (UserDefaults) and
-/// toggles the login item via `SMAppService.mainApp`.
+/// The settings pane (spec §5.4), shown *inside* the main window (``ContentView`` flips
+/// to it — settings never opens a separate window). Binds directly to ``AppSettings``
+/// (UserDefaults) and toggles the login item via `SMAppService.mainApp`.
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
@@ -17,7 +17,7 @@ struct SettingsView: View {
                     Text("Interval")
                 } minimumValueLabel: { Text("5s") } maximumValueLabel: { Text("30s") }
                 Text("\(Int(settings.samplingInterval))s between readings (applies on restart)")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundColor(.secondary)
             }
 
             Section("Notifications") {
@@ -36,13 +36,6 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Appearance") {
-                Slider(value: $settings.panelOpacity, in: 0.2...1.0) {
-                    Text("Panel opacity")
-                } minimumValueLabel: { Text("20%") } maximumValueLabel: { Text("100%") }
-                Toggle("Start collapsed (watts only)", isOn: $settings.collapsed)
-            }
-
             Section("General") {
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { enabled in
@@ -53,7 +46,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 380, height: 460)
+        .scrollContentBackground(.hidden)
     }
 }
 

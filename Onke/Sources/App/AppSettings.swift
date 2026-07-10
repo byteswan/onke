@@ -19,7 +19,6 @@ final class AppSettings: ObservableObject {
         // Register defaults so first launch reflects the spec values without a write.
         defaults.register(defaults: [
             Keys.samplingInterval: 5.0,
-            Keys.panelOpacity: 1.0,
             Keys.timeLowMinutes: 90.0,
             Keys.timeLowRearmMinutes: 110.0,
             Keys.drainSpikeMultiplier: 1.5,
@@ -29,8 +28,6 @@ final class AppSettings: ObservableObject {
 
     private enum Keys {
         static let samplingInterval = "settings.samplingInterval"
-        static let panelOpacity = "settings.panelOpacity"
-        static let collapsed = "settings.collapsed"
         static let timeLowMinutes = "settings.timeLowMinutes"
         static let timeLowRearmMinutes = "settings.timeLowRearmMinutes"
         static let drainSpikeMultiplier = "settings.drainSpikeMultiplier"
@@ -41,16 +38,6 @@ final class AppSettings: ObservableObject {
     var samplingInterval: Double {
         get { defaults.double(forKey: Keys.samplingInterval) }
         set { defaults.set(max(5, newValue), forKey: Keys.samplingInterval); objectWillChange.send() }
-    }
-
-    var panelOpacity: Double {
-        get { defaults.double(forKey: Keys.panelOpacity) }
-        set { defaults.set(min(1, max(0.2, newValue)), forKey: Keys.panelOpacity); objectWillChange.send() }
-    }
-
-    var collapsed: Bool {
-        get { defaults.bool(forKey: Keys.collapsed) }
-        set { defaults.set(newValue, forKey: Keys.collapsed); objectWillChange.send() }
     }
 
     /// Rule #1 trigger: notify when computed time-to-empty drops below this (minutes).

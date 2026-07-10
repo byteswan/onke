@@ -1,23 +1,27 @@
 import AppKit
 import SwiftUI
 
-/// Owns the long-lived app objects: settings, the metrics engine, the notification engine,
-/// and the floating panel. Kept as an `NSApplicationDelegate` because the panel needs
-/// direct AppKit control that the SwiftUI `App` lifecycle doesn't expose cleanly.
+/// Owns the long-lived app objects: settings, the metrics engine, the notification
+/// engine, and the privileged-helper client. The window itself is a SwiftUI `Window`
+/// scene in ``OnkeApp``; the delegate only handles lifecycle that SwiftUI doesn't
+/// (dock-icon reopen).
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     let settings = AppSettings.shared
 
-    /// Single metrics engine shared by the panel and the menu bar extra.
+    /// Single metrics engine shared by the main window and the menu bar extra.
     let engine: MetricsEngine
 
+    /// Transient UI state (in-window settings flip) shared with the menu bar extra.
+    let ui = UIState()
+
     private let notifications: NotificationEngine
+    /// Hourly in/out energy history (the "Power history" screen).
+    let ledger = EnergyLedger()
     let helper = HelperClient()
-    private lazy var toggles = SystemToggles(helper: helper)
-    private lazy var cleanup = CleanupCoordinator(toggles: toggles, helper: helper)
-    private lazy var settingsWindow = SettingsWindowController(settings: settings)
-    private var panel: FloatingPanel<PanelView>?
+    lazy var toggles = SystemToggles(helper: helper)
+    lazy var cleanup = CleanupCoordinator(toggles: toggles, helper: helper)
 
     override init() {
         // Normal launch reads live IOKit battery data. The hidden `--demo` launch argument
@@ -33,26 +37,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Menu-less accessory app: no dock icon, no app menu.
-        NSApp.setActivationPolicy(.accessory)
-
         notifications.attach(to: engine, helper: helper)
+        ledger.attach(to: engine, expectedInterval: settings.samplingInterval)
         engine.start()
         // Reflect the helper's current approval state; connect if already enabled from a
         // previous session. First-time enabling happens on user action in the per-app UI.
         helper.refreshState()
         if helper.state == .enabled { helper.connect() }
-
-        let root = PanelView(engine: engine, settings: settings, helper: helper,
-                             cleanup: cleanup, toggles: toggles) { [weak self] in
-            self?.openSettings()
-        }
-        let panel = FloatingPanel(rootView: root)
-        panel.present()
-        self.panel = panel
     }
 
-    func openSettings() {
-        settingsWindow.show()
+    /// Clicking the dock icon with the window closed brings it back.
+    func applicationShouldHandleReopen(_ sender: NSApplication,
+                                       hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            sender.windows.first?.makeKeyAndOrderFront(nil)
+        }
+        return true
     }
 }

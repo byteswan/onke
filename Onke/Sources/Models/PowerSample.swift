@@ -33,6 +33,14 @@ struct PowerSample: Equatable {
     /// the effective-charging decision. See ``isEffectivelyCharging``.
     var osReportsCharging: Bool
 
+    /// Power flowing in from the external source (adapter/powerbank) in watts, from the
+    /// battery's `PowerTelemetryData` (Apple Silicon). `nil` where unavailable.
+    var systemInWatts: Double? = nil
+
+    /// Total system consumption in watts (`SystemLoad`). Together with ``systemInWatts``
+    /// this decomposes ``netWatts``: net ≈ in − load. `nil` where unavailable.
+    var systemLoadWatts: Double? = nil
+
     /// Signed instantaneous power in watts. Negative = net drain, positive = net charge.
     ///
     /// `netWatts = amperage(mA) × voltage(mV) / 10^6` → (A × V) = W.

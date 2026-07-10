@@ -11,10 +11,6 @@ struct PerAppView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Energy impact")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
             switch helper.state {
             case .enabled:
                 appList
@@ -44,8 +40,12 @@ struct PerAppView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+                // Raw error strings are developer noise; keep them one hover away.
+                .help(explainerDetail ?? "")
             HStack {
                 Button(explainerButtonTitle) { helper.enable() }
+                    .buttonStyle(.borderedProminent)
+                    .focusable(false)
                 if case .requiresApproval = helper.state {
                     Button("Open Settings") { helper.openApprovalSettings() }
                 }
@@ -58,11 +58,16 @@ struct PerAppView: View {
         switch helper.state {
         case .requiresApproval:
             return "Per-app drain needs the Onke helper. Approve it in System Settings, then retry."
-        case .failed(let msg):
-            return "Couldn't start the helper: \(msg)"
+        case .failed:
+            return "Couldn't start the helper — hover for details."
         default:
             return "Per-app drain uses a small privileged helper to read powermetrics. It's off by default."
         }
+    }
+
+    private var explainerDetail: String? {
+        if case .failed(let msg) = helper.state { return msg }
+        return nil
     }
 
     private var explainerButtonTitle: String {
@@ -88,8 +93,9 @@ private struct AppRow: View {
             Text(app.name).font(.caption).lineLimit(1)
             Spacer(minLength: 4)
             GeometryReader { geo in
+                // Data viz, not a control — mint, never the interactive blue.
                 Capsule()
-                    .fill(Color.accentColor.opacity(0.5))
+                    .fill(Theme.accent.opacity(0.5))
                     .frame(width: max(2, geo.size.width * fraction), height: 4)
                     .frame(maxHeight: .infinity, alignment: .center)
             }

@@ -1,16 +1,32 @@
 import SwiftUI
 
-/// App entry point. Onke is menu-less: there is no ordinary window and no dock
-/// presence — a floating `NSPanel` (owned by ``AppDelegate``) is the whole UI, plus a
-/// menu bar extra for quit/settings (spec §5.2). The panel has no close box; closing =
-/// quitting from the menu bar.
+/// App entry point. Onke is a normal windowed Mac app: a single main window (SwiftUI
+/// `Window` scene, so macOS restores its position/size automatically) plus a menu bar
+/// extra with the battery % and quick actions. Closing the window keeps Onke running in
+/// the menu bar so monitoring and notifications continue.
 @main
 struct OnkeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
+        Window("Onke", id: "main") {
+            ContentView(engine: appDelegate.engine,
+                        settings: appDelegate.settings,
+                        ui: appDelegate.ui,
+                        helper: appDelegate.helper,
+                        cleanup: appDelegate.cleanup,
+                        toggles: appDelegate.toggles,
+                        ledger: appDelegate.ledger)
+        }
+        // The in-content header row is the chrome; the system title bar is hidden and
+        // the traffic lights float over it (ContentView leaves them clearance).
+        .windowStyle(.hiddenTitleBar)
+        // Fixed-size window: the content declares an exact frame and the window can't
+        // be resized past it.
+        .windowResizability(.contentSize)
+
         MenuBarExtra {
-            MenuBarContent(engine: appDelegate.engine) { appDelegate.openSettings() }
+            MenuBarContent(engine: appDelegate.engine, ui: appDelegate.ui)
         } label: {
             // Battery % as a secondary affordance in the menu bar.
             if let s = appDelegate.engine.sample, s.hasBattery {
@@ -25,7 +41,8 @@ struct OnkeApp: App {
 /// The menu bar dropdown: a compact status readout plus lifecycle actions.
 private struct MenuBarContent: View {
     @ObservedObject var engine: MetricsEngine
-    var onOpenSettings: () -> Void
+    @ObservedObject var ui: UIState
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         if let s = engine.sample, s.hasBattery {
@@ -34,8 +51,21 @@ private struct MenuBarContent: View {
             Text("No battery detected")
         }
         Divider()
-        Button("Settings…") { onOpenSettings() }
-            .keyboardShortcut(",")
+        Button("Open Onke") {
+            openWindow(id: "main")
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        Button("Power History") {
+            ui.screen = .analytics
+            openWindow(id: "main")
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        Button("Settings…") {
+            ui.screen = .settings
+            openWindow(id: "main")
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        .keyboardShortcut(",")
         Button("Quit Onke") { NSApplication.shared.terminate(nil) }
             .keyboardShortcut("q")
     }
