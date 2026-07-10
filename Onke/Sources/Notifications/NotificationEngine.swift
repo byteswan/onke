@@ -14,7 +14,7 @@ final class NotificationEngine {
 
     private let settings: AppSettings
     private var evaluator = NotificationEvaluator()
-    private var cancellable: AnyCancellable?
+    private var cancellables: Set<AnyCancellable> = []
     private let post: (PowerNotification) -> Void
 
     init(settings: AppSettings,
@@ -23,12 +23,18 @@ final class NotificationEngine {
         self.post = post
     }
 
-    /// Ask for permission once, then subscribe to the metrics stream.
-    func attach(to engine: MetricsEngine) {
+    /// Ask for permission once, then subscribe to the metrics stream. If a `helper` is
+    /// provided, the drain-spike rule is fed the current top energy offender so its
+    /// notification body can name the culprit (spec §6.2).
+    func attach(to engine: MetricsEngine, helper: HelperClient? = nil) {
         requestAuthorizationIfNeeded()
-        cancellable = engine.didSample.sink { [weak self] sample, rate in
+        engine.didSample.sink { [weak self] sample, rate in
             self?.consume(sample: sample, rate: rate)
-        }
+        }.store(in: &cancellables)
+
+        helper?.$topApps.sink { [weak self] apps in
+            self?.evaluator.topOffender = apps.first?.name
+        }.store(in: &cancellables)
     }
 
     private func consume(sample: PowerSample, rate: RateEstimator.Output) {
@@ -72,13 +78,24 @@ final class NotificationEngine {
 /// feeding it a scripted `(sample, rate)` sequence.
 struct NotificationEvaluator {
 
-    private let rules: [NotificationRule] = [
-        TimeRemainingLowRule(),
-        DrainSpikeRule(),
-        WeakPowerbankRule(),
-        UnplugAtFullRule(),
-        LevelWarningRule(),
-    ]
+    private let drainSpikeRule = DrainSpikeRule()
+    private let rules: [NotificationRule]
+
+    init() {
+        rules = [
+            TimeRemainingLowRule(),
+            drainSpikeRule,
+            WeakPowerbankRule(),
+            UnplugAtFullRule(),
+            LevelWarningRule(),
+        ]
+    }
+
+    /// Name of the current top energy offender, surfaced in the drain-spike body (§6.2).
+    var topOffender: String? {
+        get { drainSpikeRule.topOffender }
+        nonmutating set { drainSpikeRule.topOffender = newValue }
+    }
 
     // Rolling 10-min average of watts-out, as an EMA to avoid storing a buffer.
     private var avgWattsOut: Double = 0

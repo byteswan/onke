@@ -9,9 +9,17 @@ import SwiftUI
 struct PanelView: View {
     @ObservedObject var engine: MetricsEngine
     @ObservedObject var settings: AppSettings
+    /// Per-app drain source (phase 2). Optional so previews/tests can omit it.
+    var helper: HelperClient?
+    /// Phase 3 cleanup + toggles. Optional for previews/tests.
+    var cleanup: CleanupCoordinator?
+    var toggles: SystemToggles?
 
     /// Invoked by the gear button. Injected so the view stays decoupled from AppKit.
     var onOpenSettings: () -> Void = {}
+
+    @State private var showPerApp = false
+    @State private var showSavePower = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: settings.collapsed ? 4 : 10) {
@@ -21,12 +29,39 @@ struct PanelView: View {
                 batteryRow
                 timeRow
                 statusLine
+                if helper != nil { perAppSection }
+                if cleanup != nil { savePowerSection }
             }
         }
         .padding(settings.collapsed ? 10 : 16)
         .frame(width: settings.collapsed ? 150 : 260, alignment: .leading)
         .background(.ultraThinMaterial)
         .opacity(settings.panelOpacity)
+    }
+
+    @ViewBuilder private var perAppSection: some View {
+        if let helper {
+            Divider()
+            DisclosureGroup(isExpanded: $showPerApp) {
+                // In phase 3 each row gains a Quit action (guarded by the denylist).
+                PerAppView(helper: helper, onQuit: cleanup.map { c in { c.quit($0) } })
+                    .padding(.top, 4)
+            } label: {
+                Text("Per-app drain").font(.subheadline)
+            }
+        }
+    }
+
+    @ViewBuilder private var savePowerSection: some View {
+        if let cleanup, let toggles {
+            Divider()
+            DisclosureGroup(isExpanded: $showSavePower) {
+                SavePowerView(cleanup: cleanup, toggles: toggles)
+                    .padding(.top, 4)
+            } label: {
+                Text("Save power").font(.subheadline)
+            }
+        }
     }
 
     // MARK: Header (gear + collapse)

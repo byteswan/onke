@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.byteswan.onke.helper</string>
+	<!-- SMAppService.daemon launches this on demand when the app connects to the
+	     Mach service below; the helper exits itself after 60s idle (spec §6.1). -->
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/com.byteswan.onke.helper</string>
+	<key>MachServices</key>
+	<dict>
+		<key>com.byteswan.onke.helper</key>
+		<true/>
+	</dict>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>com.byteswan.onke</string>
+	</array>
+</dict>
+</plist>

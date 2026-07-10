@@ -13,6 +13,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let engine: MetricsEngine
 
     private let notifications: NotificationEngine
+    let helper = HelperClient()
+    private lazy var toggles = SystemToggles(helper: helper)
+    private lazy var cleanup = CleanupCoordinator(toggles: toggles, helper: helper)
     private lazy var settingsWindow = SettingsWindowController(settings: settings)
     private var panel: FloatingPanel<PanelView>?
 
@@ -33,10 +36,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Menu-less accessory app: no dock icon, no app menu.
         NSApp.setActivationPolicy(.accessory)
 
-        notifications.attach(to: engine)
+        notifications.attach(to: engine, helper: helper)
         engine.start()
+        // Reflect the helper's current approval state; connect if already enabled from a
+        // previous session. First-time enabling happens on user action in the per-app UI.
+        helper.refreshState()
+        if helper.state == .enabled { helper.connect() }
 
-        let root = PanelView(engine: engine, settings: settings) { [weak self] in
+        let root = PanelView(engine: engine, settings: settings, helper: helper,
+                             cleanup: cleanup, toggles: toggles) { [weak self] in
             self?.openSettings()
         }
         let panel = FloatingPanel(rootView: root)
