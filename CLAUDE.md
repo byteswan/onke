@@ -4,9 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-**Greenfield.** There is no source code yet — only `docs/onke_v0_spec.md`, which is the authoritative source of truth for what to build. Read it before making architectural decisions. This CLAUDE.md summarizes that spec so you can orient quickly; when the two disagree, the spec wins.
+**Phase 1, in progress.** A buildable Xcode project exists with a working vertical slice: core models, the `PowerSourceProviding` protocol behind a `FakePowerSource`, a `MetricsEngine`, and a floating `NSPanel` showing live (simulated) net watts with the effective-charging color logic. Still to come in phase 1: the real IOKit provider, EMA rate/time-remaining, the 5 notification rules with hysteresis, and settings.
 
-Note: the current `.gitignore` is a stale Flutter template inherited at repo creation. It is wrong for this project and should be replaced with a Swift/Xcode `.gitignore` when the Xcode project lands.
+`docs/onke_v0_spec.md` is the authoritative source of truth for what to build — read it before making architectural decisions. This CLAUDE.md summarizes it so you can orient quickly; when the two disagree, the spec wins.
+
+## Source Layout
+
+Single app target `Onke`, driven by a hand-written `Onke.xcodeproj` that uses a **file-system-synchronized group** — new files added under `Onke/` are picked up automatically, so you rarely need to touch `project.pbxproj`.
+
+- `Onke/Sources/Models/` — `PowerSample`, the raw per-sample payload everything derives from.
+- `Onke/Sources/Power/` — `PowerSourceProviding` protocol + `FakePowerSource` (real IOKit impl lands here later).
+- `Onke/Sources/Metrics/` — `MetricsEngine`, the `@MainActor ObservableObject` bridging provider → UI.
+- `Onke/Sources/UI/` — `PanelView` (SwiftUI dashboard) and `FloatingPanel` (the `NSPanel` host).
+- `Onke/Sources/App/` — `OnkeApp` (`@main`, menu bar extra) and `AppDelegate` (owns engine + panel).
+- `Onke/Resources/` — `Info.plist` (`LSUIElement`), `Onke.entitlements` (App Sandbox intentionally **off** — IOKit reads + future root helper need it), `Assets.xcassets`.
 
 ## What Onke Is
 
@@ -50,6 +61,11 @@ Two processes:
 
 Xcode-based (the spec mandates an Xcode project, not SPM-only, because it needs app + helper targets, entitlements, and launchd plists).
 
-- Open the project in Xcode, set your own team/signing identity, then Build & Run (⌘R). Test with ⌘U.
-- There is **no `.xcodeproj` yet**, so concrete `xcodebuild` scheme/target names are not yet known. Once the Xcode project exists, add the real `xcodebuild -scheme … build`/`test` invocations and single-test filters here.
-- Demo mode (fake provider) should be reachable via a hidden setting or launch argument to exercise all notification rules without real battery events.
+- **In Xcode:** open `Onke.xcodeproj`, set your own team/signing identity, then Build & Run (⌘R). Test with ⌘U.
+- **Command line build:**
+  ```
+  xcodebuild -project Onke.xcodeproj -scheme Onke -configuration Debug -destination 'platform=macOS' build
+  ```
+  Add `CODE_SIGNING_ALLOWED=NO` for an unsigned local build in CI/agents.
+- **Tests:** no test target exists yet. When one is added, run with `xcodebuild ... test` and filter a single test via `-only-testing:OnkeTests/<Suite>/<test>`.
+- **Demo mode:** the fake provider is selected by a launch argument — `--demo <scenario>` where scenario is `discharge` (default), `weakPowerbank`, `healthyCharge`, or `fullCycle`. Set it in the scheme's Run arguments (or pass it when launching the built binary directly) to exercise states — including the amber "plugged in but draining" case — without a real battery.
