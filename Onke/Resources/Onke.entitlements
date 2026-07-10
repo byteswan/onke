@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  App Sandbox is intentionally OFF. Onke reads the AppleSmartBattery IORegistry
+	  entry (spec §5.1) and, in phase 2+, coordinates a root helper running
+	  `powermetrics` over XPC — neither is possible inside the sandbox. This is a
+	  build-from-source, self-signed, client-only tool (spec §2), so the trade-off is
+	  acceptable and there is no App Store distribution to satisfy.
+	-->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+</dict>
+</plist>
