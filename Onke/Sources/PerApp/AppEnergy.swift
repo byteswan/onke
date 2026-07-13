@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Darwin   // proc_pidpath
 
 /// Per-app energy impact, aggregated from raw per-process samples (spec §6.2). The value
 /// is relative and unitless — labeled "Energy impact", never watts.
@@ -9,6 +10,10 @@ struct AppEnergy: Identifiable, Equatable {
     var energyImpact: Double
     /// A representative pid for the app, used to resolve an icon / offer a Quit action.
     var representativePid: Int32
+    /// Absolute executable path resolved from the pid at aggregation time (pids can die
+    /// later, so we snapshot it here). Drives user-vs-system classification. nil if the
+    /// process was gone or the path couldn't be read.
+    var executablePath: String?
 
     /// Aggregate raw process samples up to the app level, most-hungry first.
     ///
@@ -27,11 +32,21 @@ struct AppEnergy: Identifiable, Equatable {
             } else {
                 byKey[key] = AppEnergy(name: displayName,
                                        energyImpact: p.energyImpact,
-                                       representativePid: p.pid)
+                                       representativePid: p.pid,
+                                       executablePath: executablePath(pid: p.pid))
             }
         }
 
         return byKey.values.sorted { $0.energyImpact > $1.energyImpact }
+    }
+
+    /// Absolute path of a pid's executable via `proc_pidpath` (works for daemons too,
+    /// which have no NSRunningApplication). nil if the process is gone. The app runs
+    /// unsandboxed, so this is permitted.
+    private static func executablePath(pid: Int32) -> String? {
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
+        return length > 0 ? String(cString: buffer) : nil
     }
 
     /// Resolve a process to (groupingKey, displayName). Uses the owning app's bundle id +

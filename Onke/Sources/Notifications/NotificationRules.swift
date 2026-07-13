@@ -58,8 +58,8 @@ final class TimeRemainingLowRule: NotificationRule {
         armed = false
         return PowerNotification(
             id: "time-low",
-            title: "Battery running low",
-            body: "About \(Int(minutes)) min left at the current drain.")
+            title: Strings.Notifications.timeLowTitle,
+            body: Strings.Notifications.timeLowBody(minutes: Int(minutes)))
     }
 }
 
@@ -81,11 +81,10 @@ final class DrainSpikeRule: NotificationRule {
 
         guard armed, ratio >= ctx.drainSpikeMultiplier, ctx.sustainedSpike >= 60 else { return nil }
         armed = false
-        let who = topOffender.map { " — \($0) is the top draw." } ?? ""
         return PowerNotification(
             id: "drain-spike",
-            title: "Power draw spiked",
-            body: String(format: "Now pulling %.1f W.%@", wattsOut, who))
+            title: Strings.Notifications.drainSpikeTitle,
+            body: Strings.Notifications.drainSpikeBody(watts: wattsOut, topOffender: topOffender))
     }
 }
 
@@ -106,9 +105,8 @@ final class WeakPowerbankRule: NotificationRule {
         armed = false
         return PowerNotification(
             id: "weak-powerbank",
-            title: "Power source too weak",
-            body: String(format: "Plugged in but still draining (%.1f W). Try a stronger adapter.",
-                         s.netWatts))
+            title: Strings.Notifications.weakPowerbankTitle,
+            body: Strings.Notifications.weakPowerbankBody(watts: s.netWatts))
     }
 }
 
@@ -127,8 +125,8 @@ final class UnplugAtFullRule: NotificationRule {
         armed = false
         return PowerNotification(
             id: "unplug-full",
-            title: "Battery full",
-            body: "Fully charged — you can unplug the power source.")
+            title: Strings.Notifications.unplugFullTitle,
+            body: Strings.Notifications.unplugFullBody)
     }
 }
 
@@ -154,17 +152,9 @@ final class LevelWarningRule: NotificationRule {
             fired.insert(t)
             return PowerNotification(
                 id: "level-\(Int(t))",
-                title: "Battery at \(Int(t))%",
-                body: batteryBody(for: t))
+                title: Strings.Notifications.levelTitle(percent: Int(t)),
+                body: Strings.Notifications.levelBody(threshold: t))
         }
         return nil
-    }
-
-    private func batteryBody(for threshold: Double) -> String {
-        switch threshold {
-        case 10: return "Critically low — connect power soon."
-        case 25: return "Getting low."
-        default: return "Heads up on your battery level."
-        }
     }
 }

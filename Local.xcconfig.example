@@ -1,0 +1,17 @@
+// Local signing config — copy this file to `Local.xcconfig` and fill in your own
+// Apple Development Team ID, then Build & Run from Xcode.
+//
+//   cp Local.xcconfig.example Local.xcconfig
+//
+// `Local.xcconfig` is gitignored, so your Team ID never gets committed. The project's
+// build configs pull this in as a base config, so DEVELOPMENT_TEAM stays out of
+// project.pbxproj entirely.
+//
+// Find your Team ID: Xcode ▸ Settings ▸ Accounts ▸ (your Apple ID) ▸ your team, or run
+//   security find-identity -v -p codesigning
+// and read the ID in parentheses after your name, e.g. "Apple Development: you (ABCDE12345)".
+
+DEVELOPMENT_TEAM = YOUR_TEAM_ID_HERE
+
+// Automatic signing (the default) will pick a matching Development cert for this team.
+CODE_SIGN_STYLE = Automatic

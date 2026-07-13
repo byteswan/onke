@@ -55,6 +55,28 @@ extension View {
     }
 }
 
+/// Shared back button used by both the Settings and Power-history screens (chevron +
+/// "Back"). Font is bumped 20% over the default subheadline so the affordance reads
+/// clearly. A single component keeps the two screens' back buttons identical.
+struct BackButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Image(systemName: "chevron.left")
+                Text(Strings.Dashboard.back)
+            }
+            // subheadline ≈ 15pt; +20% ≈ 18pt.
+            .font(.system(size: 18, weight: .medium))
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .foregroundColor(Theme.action)
+        .help(Strings.Dashboard.backToDashboardHelp)
+    }
+}
+
 /// A small ⓘ button that pops an explanation of exactly what the neighboring control
 /// does when pressed. Click to open; also available on hover via the tooltip.
 struct InfoTip: View {
@@ -79,6 +101,36 @@ struct InfoTip: View {
                 .padding(12)
                 .frame(width: 280, alignment: .leading)
         }
+    }
+}
+
+/// A tappable card header that expands/collapses its body: `SectionHeader` on the left,
+/// an optional ⓘ tip, and a chevron that rotates 90° when open. Used for the dashboard's
+/// Per-app / Save-power cards and the Power-history day cards.
+struct CollapsibleCardHeader: View {
+    let title: String
+    let icon: String
+    var tip: String? = nil
+    let isExpanded: Bool
+    let toggle: () -> Void
+
+    var body: some View {
+        Button(action: toggle) {
+            HStack(spacing: 6) {
+                SectionHeader(title: title, icon: icon)
+                if let tip {
+                    InfoTip(text: tip)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
     }
 }
 

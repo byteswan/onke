@@ -10,34 +10,50 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Sampling") {
+            Section(Strings.Settings.samplingSection) {
                 // Interval affects CPU cost; the spec floor is 5s. Change applies on
                 // next launch (the running timer isn't hot-swapped in phase 1).
                 Slider(value: $settings.samplingInterval, in: 5...30, step: 1) {
-                    Text("Interval")
-                } minimumValueLabel: { Text("5s") } maximumValueLabel: { Text("30s") }
-                Text("\(Int(settings.samplingInterval))s between readings (applies on restart)")
+                    Text(Strings.Settings.interval)
+                } minimumValueLabel: { Text(Strings.Settings.intervalMin) }
+                  maximumValueLabel: { Text(Strings.Settings.intervalMax) }
+                Text(Strings.Settings.intervalCaption(seconds: Int(settings.samplingInterval)))
                     .font(.caption).foregroundColor(.secondary)
             }
 
-            Section("Notifications") {
-                Toggle("Enable notifications", isOn: $settings.notificationsEnabled)
-                LabeledContent("Low-battery alert") {
-                    Stepper("\(Int(settings.timeLowMinutes)) min",
+            Section(Strings.Settings.notificationsSection) {
+                Toggle(Strings.Settings.enableNotifications, isOn: $settings.notificationsEnabled)
+                // Time-remaining alert + its re-arm, phrased as a pair: the second row is
+                // indented under the first to show it only governs when the alert repeats.
+                LabeledContent {
+                    Stepper(Strings.Settings.minutes(Int(settings.timeLowMinutes)),
                             value: $settings.timeLowMinutes, in: 15...240, step: 5)
+                } label: {
+                    labelWithTip(Strings.Settings.warnUnder, tip: Strings.Settings.warnUnderTip)
                 }
-                LabeledContent("Re-arm above") {
-                    Stepper("\(Int(settings.timeLowRearmMinutes)) min",
+                LabeledContent {
+                    Stepper(Strings.Settings.minutes(Int(settings.timeLowRearmMinutes)),
                             value: $settings.timeLowRearmMinutes, in: 20...300, step: 5)
+                } label: {
+                    labelWithTip(Strings.Settings.stopWarningAbove, tip: Strings.Settings.stopWarningAboveTip)
+                        .padding(.leading, 16)
                 }
-                LabeledContent("Drain-spike sensitivity") {
-                    Stepper(String(format: "%.1f×", settings.drainSpikeMultiplier),
+                LabeledContent {
+                    Stepper(Strings.Settings.multiplier(settings.drainSpikeMultiplier),
                             value: $settings.drainSpikeMultiplier, in: 1.1...3.0, step: 0.1)
+                } label: {
+                    labelWithTip(Strings.Settings.drainSpikeAlert, tip: Strings.Settings.drainSpikeTip)
                 }
             }
 
-            Section("General") {
-                Toggle("Launch at login", isOn: $launchAtLogin)
+            Section(Strings.Settings.perAppSection) {
+                Toggle(Strings.Settings.showSystemProcesses, isOn: $settings.showSystemProcesses)
+                Text(Strings.Settings.showSystemProcessesCaption)
+                    .font(.caption).foregroundColor(.secondary)
+            }
+
+            Section(Strings.Settings.generalSection) {
+                Toggle(Strings.Settings.launchAtLogin, isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { enabled in
                         LaunchAtLogin.set(enabled)
                         // Re-read actual state in case the toggle failed.
@@ -47,6 +63,14 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+    }
+
+    /// A settings-row label with an ⓘ tip explaining what the adjacent control does.
+    private func labelWithTip(_ title: String, tip: String) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+            InfoTip(text: tip)
+        }
     }
 }
 

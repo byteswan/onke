@@ -23,6 +23,7 @@ final class AppSettings: ObservableObject {
             Keys.timeLowRearmMinutes: 110.0,
             Keys.drainSpikeMultiplier: 1.5,
             Keys.notificationsEnabled: true,
+            Keys.showSystemProcesses: false,
         ])
     }
 
@@ -32,6 +33,7 @@ final class AppSettings: ObservableObject {
         static let timeLowRearmMinutes = "settings.timeLowRearmMinutes"
         static let drainSpikeMultiplier = "settings.drainSpikeMultiplier"
         static let notificationsEnabled = "settings.notificationsEnabled"
+        static let showSystemProcesses = "settings.showSystemProcesses"
     }
 
     /// Sampling cadence in seconds (spec: ≥ 5s). Changing it takes effect on next start.
@@ -61,5 +63,12 @@ final class AppSettings: ObservableObject {
     var notificationsEnabled: Bool {
         get { defaults.bool(forKey: Keys.notificationsEnabled) }
         set { defaults.set(newValue, forKey: Keys.notificationsEnabled); objectWillChange.send() }
+    }
+
+    /// Per-app drain: whether to include system processes (daemons, Apple services) in the
+    /// list. Off by default so the list shows the user apps you can actually act on.
+    var showSystemProcesses: Bool {
+        get { defaults.bool(forKey: Keys.showSystemProcesses) }
+        set { defaults.set(newValue, forKey: Keys.showSystemProcesses); objectWillChange.send() }
     }
 }

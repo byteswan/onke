@@ -9,9 +9,9 @@ final class UIState: ObservableObject {
 
         var title: String {
             switch self {
-            case .dashboard: return "Onke"
-            case .settings: return "Settings"
-            case .analytics: return "Power history"
+            case .dashboard: return Strings.App.name
+            case .settings: return Strings.App.settingsTitle
+            case .analytics: return Strings.App.analyticsTitle
             }
         }
     }
@@ -36,6 +36,11 @@ struct ContentView: View {
     var toggles: SystemToggles?
     /// Hourly in/out energy history. Optional for previews/tests.
     var ledger: EnergyLedger?
+
+    /// Which of the two tall dashboard cards is expanded. Only one at a time — the window
+    /// is fixed-height, so opening one collapses the other. Both start collapsed.
+    private enum ExpandableCard { case none, perApp, savePower }
+    @State private var expandedCard: ExpandableCard = .perApp
 
     var body: some View {
         VStack(spacing: 0) {
@@ -84,27 +89,15 @@ struct ContentView: View {
             Spacer()
             if ui.screen == .dashboard {
                 if ledger != nil {
-                    headerButton("clock.arrow.circlepath", help: "Power history") {
+                    headerButton("clock.arrow.circlepath", help: Strings.Dashboard.powerHistoryHelp) {
                         ui.screen = .analytics
                     }
                 }
-                headerButton("gearshape", help: "Settings") {
+                headerButton("gearshape", help: Strings.Dashboard.settingsHelp) {
                     ui.screen = .settings
                 }
             } else {
-                Button {
-                    ui.screen = .dashboard
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "chevron.left")
-                        Text("Back")
-                    }
-                    .font(.subheadline.weight(.medium))
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .foregroundColor(Theme.action)
-                .help("Back to dashboard")
+                BackButton { ui.screen = .dashboard }
             }
         }
         .card()
@@ -114,10 +107,10 @@ struct ContentView: View {
 
     private var footer: some View {
         HStack(spacing: 4) {
-            Text("Made with")
+            Text(Strings.App.madeWithPrefix)
             Image(systemName: "heart.fill")
                 .font(.caption2)
-            Text("by Byteswan")
+            Text(Strings.App.madeWithSuffix)
         }
         .font(.caption)
         .foregroundColor(Theme.accent)
@@ -140,21 +133,24 @@ struct ContentView: View {
 
     // MARK: Dashboard
 
+    /// No outer scroll: the hero + stats sit fixed at the top, and whichever card is
+    /// expanded flexes to fill the remaining height and scrolls *internally* if its
+    /// content overflows. A trailing spacer keeps everything top-aligned when both
+    /// cards are collapsed.
     private var dashboard: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                heroCard
-                statsCard
-                if let helper {
-                    perAppCard(helper)
-                }
-                if let cleanup, let toggles {
-                    savePowerCard(cleanup, toggles)
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            heroCard
+            statsCard
+            if let helper {
+                perAppCard(helper)
             }
-            .padding(.horizontal, 26)
-            .padding(.vertical, 16)
+            if let cleanup, let toggles {
+                savePowerCard(cleanup, toggles)
+            }
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 26)
+        .padding(.vertical, 16)
     }
 
     /// Big signed net watts + status line, centered so the card has no dead wing.
@@ -163,16 +159,25 @@ struct ContentView: View {
     @ViewBuilder private var heroCard: some View {
         VStack(spacing: 6) {
             if let s = engine.sample, s.hasBattery {
-                Text(String(format: "%+.1f W", s.netWatts))
-                    .font(.system(size: 52, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(statusColor(s))
-                    .contentTransition(.numericText())
-                Text(s.isPluggedButDraining
-                     ? "Plugged in but draining — the power source can't keep up"
-                     : "net power \(s.netWatts < 0 ? "out of" : "into") the battery")
-                    .font(.caption)
-                    .foregroundColor(s.isPluggedButDraining ? Theme.warning : .secondary)
+                if isFullAndCharging(s) {
+                    // Special case: topped off on external power. The raw net reads ~0 W,
+                    // which would otherwise show as a red "+0.0 W". Say it plainly instead.
+                    Text(Strings.Dashboard.batteryFullCharging)
+                        .font(.system(size: 30, weight: .semibold, design: .rounded))
+                        .foregroundColor(Theme.accent)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text(String(format: "%+.1f W", s.netWatts))
+                        .font(.system(size: 52, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(statusColor(s))
+                        .contentTransition(.numericText())
+                    Text(s.isPluggedButDraining
+                         ? Strings.Dashboard.pluggedButDraining
+                         : Strings.Dashboard.netPowerDirection(draining: s.netWatts < 0))
+                        .font(.caption)
+                        .foregroundColor(s.isPluggedButDraining ? Theme.warning : .secondary)
+                }
                 // Decomposed flow where telemetry exists: what the source delivers vs.
                 // what the system burns. The big number is their difference.
                 if let inW = s.systemInWatts, let outW = s.systemLoadWatts {
@@ -180,30 +185,44 @@ struct ContentView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.down.circle")
                                 .foregroundColor(Theme.accent)
-                            Text(String(format: "%.1f W in", inW))
+                            Text(Strings.Dashboard.wattsIn(inW))
                         }
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.up.circle")
                                 .foregroundColor(Theme.draining)
-                            Text(String(format: "%.1f W out", outW))
+                            Text(Strings.Dashboard.wattsOut(outW))
                         }
                     }
                     .font(.caption.monospacedDigit())
                     .foregroundColor(.secondary)
                     .padding(.top, 4)
                 }
+                // Charging-source line: shown whenever an adapter is connected. Name +
+                // wattage on the face; every reported field lives in the ⓘ tip.
+                if s.externalConnected, let adapter = engine.adapter {
+                    HStack(spacing: 4) {
+                        Image(systemName: adapter.isWireless ? "wave.3.right.circle" : "powerplug")
+                            .foregroundColor(.secondary)
+                        Text(Strings.Dashboard.adapterLine(adapter))
+                            .lineLimit(1).truncationMode(.middle)
+                        InfoTip(text: Strings.Dashboard.adapterDetail(adapter))
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 2)
+                }
             } else if engine.sample != nil {
-                Text("No battery")
+                Text(Strings.Dashboard.noBattery)
                     .font(.title.weight(.medium))
                     .foregroundColor(.secondary)
-                Text("Onke monitors battery power — this Mac doesn't report one.")
+                Text(Strings.Dashboard.noBatteryDetail)
                     .font(.caption)
                     .foregroundColor(.secondary)
             } else {
                 Text("—")
                     .font(.system(size: 52, weight: .semibold, design: .rounded))
                     .foregroundColor(.secondary)
-                Text("reading power data…")
+                Text(Strings.Dashboard.readingPowerData)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -222,7 +241,7 @@ struct ContentView: View {
             HStack(spacing: 0) {
                 statCell(icon: batterySymbol(s.percentage),
                          value: "\(Int(s.percentage.rounded()))%",
-                         label: "battery")
+                         label: Strings.Dashboard.batteryLabel)
                 Divider().frame(height: 32)
                 statCell(icon: "clock",
                          value: timeRemainingValue,
@@ -230,7 +249,7 @@ struct ContentView: View {
                 Divider().frame(height: 32)
                 statCell(icon: "gauge.with.needle",
                          value: rateValue,
-                         label: "per hour")
+                         label: Strings.Dashboard.perHourLabel)
             }
             .card()
         }
@@ -255,25 +274,70 @@ struct ContentView: View {
 
     private func perAppCard(_ helper: HelperClient) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Per-app drain", icon: "app.badge")
-            PerAppView(helper: helper, onQuit: cleanup.map { c in { c.quit($0) } })
+            CollapsibleCardHeader(title: Strings.Dashboard.perAppDrainTitle,
+                                  icon: "app.badge",
+                                  tip: Strings.Dashboard.energyImpactTip,
+                                  isExpanded: expandedCard == .perApp) {
+                toggleCard(.perApp)
+            }
+            if expandedCard == .perApp {
+                cardScroll {
+                    PerAppView(helper: helper,
+                               onQuit: cleanup.map { c in { c.quit($0) } },
+                               showSystem: settings.showSystemProcesses)
+                }
+            }
         }
         .card()
     }
 
     private func savePowerCard(_ cleanup: CleanupCoordinator, _ toggles: SystemToggles) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Save power", icon: "leaf")
-            SavePowerView(cleanup: cleanup, toggles: toggles)
+            CollapsibleCardHeader(title: Strings.Dashboard.savePowerTitle,
+                                  icon: "leaf",
+                                  isExpanded: expandedCard == .savePower) {
+                toggleCard(.savePower)
+            }
+            if expandedCard == .savePower {
+                cardScroll {
+                    SavePowerView(cleanup: cleanup, toggles: toggles)
+                }
+            }
         }
         .card()
     }
 
+    /// Wraps an expanded card's body so it scrolls *inside* the card when its content is
+    /// taller than the space available — keeping the scroll bar in the card, not on the
+    /// whole window. Capped so the footer stays visible. Trailing padding keeps the
+    /// overlay scroll bar clear of the row controls (e.g. the ✕ quit button); top padding
+    /// separates the list from the card header.
+    private func cardScroll<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        ScrollView(.vertical) {
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.trailing, 20)
+                .padding(.top, 4)
+        }
+        .frame(maxHeight: 360)
+    }
+
+    /// Expand the tapped card, or collapse it if it was already open. Because only one
+    /// value can be held, expanding one card auto-collapses the other.
+    private func toggleCard(_ card: ExpandableCard) {
+        expandedCard = (expandedCard == card) ? .none : card
+    }
+
     // MARK: Derivations
 
-    /// Smoothed rate as "±N %", or "…" while the window warms up.
+    /// Smoothed rate as "±N %", "…" while the window warms up, or "—" when the rate is
+    /// too flat to be meaningful (same "—" the time-remaining column shows in that case,
+    /// instead of a misleading "+0%").
     private var rateValue: String {
-        guard let rate = engine.rate.ratePercentPerHour else { return "…" }
+        guard engine.rate.isWarmedUp else { return "…" }
+        guard let rate = engine.rate.ratePercentPerHour, engine.rate.timeRemaining != nil else {
+            return "—"
+        }
         return String(format: "%+.0f%%", rate)
     }
 
@@ -287,20 +351,36 @@ struct ContentView: View {
     }
 
     private func timeRemainingLabel(_ s: PowerSample) -> String {
-        s.isEffectivelyCharging ? "to full" : "left"
+        s.isEffectivelyCharging ? Strings.Dashboard.toFullLabel : Strings.Dashboard.leftLabel
     }
 
-    /// Mint when effectively charging, amber when plugged-but-draining, red on battery.
+    /// Plugged in and holding steady: external connected with essentially no current
+    /// flowing (amperage ≈ 0). Happens at a full battery, and also when macOS pauses
+    /// charging for battery health (e.g. at 80%). This is neither charging nor draining —
+    /// without a case for it the status falls through to red "On battery", which is wrong.
+    private func isPluggedAndHolding(_ s: PowerSample) -> Bool {
+        s.externalConnected && abs(s.netWatts) < 0.5
+    }
+
+    /// The stricter, full-battery form used for the hero's "Fully Charged" copy.
+    private func isFullAndCharging(_ s: PowerSample) -> Bool {
+        isPluggedAndHolding(s) && s.percentage >= 100
+    }
+
+    /// Mint when charging or plugged-and-holding, amber when plugged-but-draining, red
+    /// only when actually on battery and draining.
     private func statusColor(_ s: PowerSample) -> Color {
-        if s.isEffectivelyCharging { return Theme.accent }
+        if s.isEffectivelyCharging || isPluggedAndHolding(s) { return Theme.accent }
         if s.isPluggedButDraining { return Theme.warning }
         return Theme.draining
     }
 
     private func statusText(_ s: PowerSample) -> String {
-        if s.isEffectivelyCharging { return "External · charging" }
-        if s.isPluggedButDraining { return "Plugged in but draining" }
-        return "On battery"
+        if isFullAndCharging(s) { return Strings.Dashboard.statusCharged }
+        if s.isEffectivelyCharging { return Strings.Dashboard.statusCharging }
+        if isPluggedAndHolding(s) { return Strings.Dashboard.statusPluggedHolding }
+        if s.isPluggedButDraining { return Strings.Dashboard.statusPluggedDraining }
+        return Strings.Dashboard.statusOnBattery
     }
 
     private func batterySymbol(_ pct: Double) -> String {

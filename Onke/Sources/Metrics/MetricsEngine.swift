@@ -17,6 +17,10 @@ final class MetricsEngine: ObservableObject {
     @Published private(set) var rate: RateEstimator.Output =
         RateEstimator.Output(ratePercentPerHour: nil, timeRemaining: nil, isWarmedUp: false)
 
+    /// The connected power adapter's details (name, watts, maker…), or nil on battery.
+    /// Refreshed each sample from the public `IOPSCopyExternalPowerAdapterDetails` API.
+    @Published private(set) var adapter: PowerAdapter?
+
     private let provider: PowerSourceProviding
     private let interval: TimeInterval
     private var estimator: RateEstimator
@@ -46,6 +50,8 @@ final class MetricsEngine: ObservableObject {
         let output = estimator.ingest(sample)
         self.sample = sample
         self.rate = output
+        // Only query the adapter when something's plugged in; nil on battery.
+        self.adapter = sample.externalConnected ? PowerAdapter.current : nil
         didSample.send((sample, output))
     }
 }
