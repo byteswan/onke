@@ -189,8 +189,15 @@ enum Strings {
         static let emptyBody = "No history yet — Onke records energy in/out per clock hour while it runs. Check back after an hour."
 
         static let hourColumn = "Hour"
-        static let inColumn = "In (Wh)"
-        static let outColumn = "Out (Wh)"
+        static let inOutColumn = "In / Out (Wh)"
+        static let inMahColumn = "In (mAh)"
+        static let mahTip = "Estimated @ 3.7V & 90% efficiencey. Equivalent to a good quality PowerBank"
+
+        /// Watt-hours → powerbank-equivalent mAh: cells are rated at 3.7 V, plus a 10%
+        /// bump for real-world conversion loss (a powerbank gives up more than the ideal).
+        static func mAh(fromWattHours wh: Double) -> Double {
+            (wh * 1000 / 3.7) * 1.1
+        }
     }
 
     // MARK: Notifications

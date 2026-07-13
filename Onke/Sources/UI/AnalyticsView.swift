@@ -61,11 +61,14 @@ struct AnalyticsView: View {
 
     private func hourTable(_ rows: [EnergyLedger.HourBucket]) -> some View {
         VStack(spacing: 6) {
-            HStack {
+            HStack(spacing: 4) {
                 Text(Strings.Analytics.hourColumn)
                 Spacer()
-                Text(Strings.Analytics.inColumn).frame(width: 70, alignment: .trailing)
-                Text(Strings.Analytics.outColumn).frame(width: 70, alignment: .trailing)
+                Text(Strings.Analytics.inOutColumn).frame(width: 90, alignment: .trailing)
+                HStack(spacing: 2) {
+                    Text(Strings.Analytics.inMahColumn)
+                    InfoTip(text: Strings.Analytics.mahTip)
+                }.frame(width: 74, alignment: .trailing)
             }
             .font(.caption.weight(.semibold))
             .foregroundColor(.secondary)
@@ -73,16 +76,22 @@ struct AnalyticsView: View {
             Divider()
 
             ForEach(rows) { bucket in
-                HStack {
+                HStack(spacing: 4) {
                     Text(hourLabel(bucket.hourStart))
                         .font(.callout)
                     Spacer()
-                    Text(String(format: "%.1f", bucket.wattHoursIn))
+                    // Merged In / Out: two numbers, each keeping its own color.
+                    HStack(spacing: 2) {
+                        Text(String(format: "%.1f", bucket.wattHoursIn))
+                            .foregroundColor(Theme.accent)
+                        Text("/").foregroundColor(.secondary)
+                        Text(String(format: "%.1f", bucket.wattHoursOut))
+                            .foregroundColor(Theme.draining)
+                    }
+                    .frame(width: 90, alignment: .trailing)
+                    Text(String(format: "%.0f", Strings.Analytics.mAh(fromWattHours: bucket.wattHoursIn)))
                         .foregroundColor(Theme.accent)
-                        .frame(width: 70, alignment: .trailing)
-                    Text(String(format: "%.1f", bucket.wattHoursOut))
-                        .foregroundColor(Theme.draining)
-                        .frame(width: 70, alignment: .trailing)
+                        .frame(width: 74, alignment: .trailing)
                 }
                 .font(.callout.monospacedDigit())
             }
