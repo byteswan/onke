@@ -12,21 +12,10 @@ struct SavePowerView: View {
     @State private var lowPowerOn = false
     @State private var wifiOn = true
     @State private var bluetoothOn = true
+    /// Brightness toggle: on = dim to 40%, off = restore to 80%.
+    @State private var brightnessDimmed = false
 
-    private enum Tips {
-        static let cleanup = """
-        One click does all of this:
-        • Turns on Low Power Mode (via the privileged helper)
-        • Drops screen brightness to 20%
-        • Lists the top 3 energy-hungry apps below with Quit buttons — nothing is quit automatically
-
-        Undo restores your previous brightness and turns Low Power Mode back off.
-        """
-        static let lowPower = "Toggles macOS Low Power Mode (pmset, via the privileged helper). Reduces CPU performance and background activity to stretch the battery."
-        static let wifi = "Turns Wi-Fi on or off — same as the menu bar toggle. Uses CoreWLAN, falling back to networksetup via the helper if macOS blocks it."
-        static let bluetooth = "Turns Bluetooth on or off (uses the blueutil tool installed on this Mac). Disconnects Bluetooth accessories while off."
-        static let brightness = "Sets the built-in display's brightness to 20%. Restore it with the brightness keys or Cleanup's Undo."
-    }
+    private typealias Tips = Strings.SavePower.Tips
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -35,14 +24,14 @@ struct SavePowerView: View {
                 Button {
                     cleanup.runCleanup()
                 } label: {
-                    Label("Cleanup", systemImage: "sparkles")
+                    Label(Strings.SavePower.cleanupButton, systemImage: "sparkles")
                 }
                 .buttonStyle(.borderedProminent)
                 .focusable(false)
                 .disabled(cleanup.isBusy)
 
                 if cleanup.lastUndo != nil {
-                    Button("Undo") { cleanup.undo() }
+                    Button(Strings.SavePower.undo) { cleanup.undo() }
                 }
 
                 InfoTip(text: Tips.cleanup)
@@ -54,7 +43,7 @@ struct SavePowerView: View {
                 HStack(spacing: 6) {
                     Text(app.name).font(.caption).lineLimit(1)
                     Spacer()
-                    Button("Quit") { cleanup.quit(app) }
+                    Button(Strings.SavePower.quit) { cleanup.quit(app) }
                         .controlSize(.mini)
                 }
             }
@@ -62,29 +51,29 @@ struct SavePowerView: View {
             Divider().padding(.vertical, 2)
 
             // Individual toggles — each hidden when unavailable.
-            toggleRow("Low Power Mode", tip: Tips.lowPower, isOn: $lowPowerOn)
+            toggleRow(Strings.SavePower.lowPowerMode, tip: Tips.lowPower, isOn: $lowPowerOn)
                 .onChange(of: lowPowerOn) { on in toggles.setLowPowerMode(on) }
 
             if toggles.wifiAvailable {
-                toggleRow("Wi-Fi", tip: Tips.wifi, isOn: $wifiOn)
+                toggleRow(Strings.SavePower.wifi, tip: Tips.wifi, isOn: $wifiOn)
                     .onChange(of: wifiOn) { on in toggles.setWiFi(on: on) }
             }
             if toggles.bluetoothAvailable {
-                toggleRow("Bluetooth", tip: Tips.bluetooth, isOn: $bluetoothOn)
+                toggleRow(Strings.SavePower.bluetooth, tip: Tips.bluetooth, isOn: $bluetoothOn)
                     .onChange(of: bluetoothOn) { on in toggles.setBluetooth(on: on) }
             }
             if toggles.brightnessAvailable {
-                HStack(spacing: 6) {
-                    Text("Screen brightness")
-                    InfoTip(text: Tips.brightness)
-                    Spacer()
-                    Button("Dim") { toggles.lowerBrightness(to: 0.2) }
-                }
+                toggleRow(Strings.SavePower.screenBrightness, tip: Tips.brightness,
+                          isOn: $brightnessDimmed)
+                    .onChange(of: brightnessDimmed) { dimmed in
+                        toggles.lowerBrightness(to: dimmed ? 0.4 : 0.8)
+                    }
             }
         }
         .font(.callout)
         .onAppear {
             wifiOn = toggles.wifiIsOn
+            if let b = toggles.currentBrightness { brightnessDimmed = b <= 0.5 }
         }
     }
 

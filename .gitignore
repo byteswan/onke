@@ -1,6 +1,10 @@
 # macOS
 .DS_Store
 
+# Local signing config — holds your personal Team ID; never commit it.
+# (Local.xcconfig.example IS committed as a template.)
+Local.xcconfig
+
 # Xcode
 build/
 DerivedData/

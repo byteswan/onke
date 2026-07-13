@@ -1,0 +1,5 @@
+// Committed base config for all targets. It optionally pulls in a gitignored
+// `Local.xcconfig` holding your personal Team ID — the `?` makes the include silent
+// when that file is absent (fresh clones, CI, unsigned command-line builds all still
+// build). To sign locally: `cp Local.xcconfig.example Local.xcconfig` and fill it in.
+#include? "Local.xcconfig"

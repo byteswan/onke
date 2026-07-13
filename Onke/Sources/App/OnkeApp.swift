@@ -9,7 +9,7 @@ struct OnkeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        Window("Onke", id: "main") {
+        Window(Strings.App.name, id: "main") {
             ContentView(engine: appDelegate.engine,
                         settings: appDelegate.settings,
                         ui: appDelegate.ui,
@@ -46,27 +46,27 @@ private struct MenuBarContent: View {
 
     var body: some View {
         if let s = engine.sample, s.hasBattery {
-            Text(String(format: "%+.1f W · %d%%", s.netWatts, Int(s.percentage.rounded())))
+            Text(Strings.App.menuStatus(watts: s.netWatts, percent: Int(s.percentage.rounded())))
         } else {
-            Text("No battery detected")
+            Text(Strings.App.noBatteryDetected)
         }
         Divider()
-        Button("Open Onke") {
+        Button(Strings.App.openOnke) {
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
-        Button("Power History") {
+        Button(Strings.App.powerHistory) {
             ui.screen = .analytics
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
-        Button("Settings…") {
+        Button(Strings.App.settingsMenuItem) {
             ui.screen = .settings
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
         .keyboardShortcut(",")
-        Button("Quit Onke") { NSApplication.shared.terminate(nil) }
+        Button(Strings.App.quitOnke) { NSApplication.shared.terminate(nil) }
             .keyboardShortcut("q")
     }
 }

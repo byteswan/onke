@@ -5,6 +5,9 @@ import SwiftUI
 /// day. This is how you tell how much a powerbank actually gave you over an afternoon.
 struct AnalyticsView: View {
     @ObservedObject var ledger: EnergyLedger
+    /// Which day cards are expanded. Empty by default, so every day starts collapsed and
+    /// only opens when tapped.
+    @State private var expandedDays: Set<Date> = []
 
     var body: some View {
         ScrollView {
@@ -13,14 +16,10 @@ struct AnalyticsView: View {
                     emptyState
                 } else {
                     ForEach(days, id: \.day) { group in
-                        VStack(alignment: .leading, spacing: 8) {
-                            SectionHeader(title: group.title, icon: "calendar")
-                            hourTable(group.rows)
-                        }
-                        .card()
+                        dayCard(group)
                     }
                 }
-                Text("In = energy drawn from the charger or powerbank. Out = energy the system consumed. Hours are clock hours (1300 – 1400), so totals line up with your watch.")
+                Text(Strings.Analytics.footnote)
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -30,10 +29,27 @@ struct AnalyticsView: View {
         }
     }
 
+    /// One collapsible day: a tappable header (calendar + date + chevron) that toggles
+    /// the hour table below it. Collapsed by default.
+    private func dayCard(_ group: (day: Date, title: String, rows: [EnergyLedger.HourBucket])) -> some View {
+        let isExpanded = expandedDays.contains(group.day)
+        return VStack(alignment: .leading, spacing: 8) {
+            CollapsibleCardHeader(title: group.title, icon: "calendar",
+                                  isExpanded: isExpanded) {
+                if isExpanded { expandedDays.remove(group.day) }
+                else { expandedDays.insert(group.day) }
+            }
+            if isExpanded {
+                hourTable(group.rows)
+            }
+        }
+        .card()
+    }
+
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 6) {
-            SectionHeader(title: "Power history", icon: "clock.arrow.circlepath")
-            Text("No history yet — Onke records energy in/out per clock hour while it runs. Check back after an hour.")
+            SectionHeader(title: Strings.Analytics.emptyTitle, icon: "clock.arrow.circlepath")
+            Text(Strings.Analytics.emptyBody)
                 .font(.callout)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -46,10 +62,10 @@ struct AnalyticsView: View {
     private func hourTable(_ rows: [EnergyLedger.HourBucket]) -> some View {
         VStack(spacing: 6) {
             HStack {
-                Text("Hour")
+                Text(Strings.Analytics.hourColumn)
                 Spacer()
-                Text("In (Wh)").frame(width: 70, alignment: .trailing)
-                Text("Out (Wh)").frame(width: 70, alignment: .trailing)
+                Text(Strings.Analytics.inColumn).frame(width: 70, alignment: .trailing)
+                Text(Strings.Analytics.outColumn).frame(width: 70, alignment: .trailing)
             }
             .font(.caption.weight(.semibold))
             .foregroundColor(.secondary)

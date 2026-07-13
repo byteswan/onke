@@ -8,6 +8,8 @@ struct PerAppView: View {
     @ObservedObject var helper: HelperClient
     /// Phase 3 injects a per-row Quit action here; nil hides the affordance.
     var onQuit: ((AppEnergy) -> Void)?
+    /// When false (default), system processes/daemons are hidden — only user apps show.
+    var showSystem: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -20,14 +22,26 @@ struct PerAppView: View {
         }
     }
 
+    private var visibleApps: [AppEnergy] {
+        showSystem ? helper.topApps : helper.topApps.filter { !ProcessCatalog.isCritical($0) }
+    }
+
     @ViewBuilder private var appList: some View {
+        let apps = visibleApps
         if helper.topApps.isEmpty {
-            Text("Measuring…")
+            Text(Strings.PerApp.measuring)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        } else if apps.isEmpty {
+            // Everything measured was a system process and the filter is on.
+            Text(Strings.PerApp.onlySystemHidden)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         } else {
-            let maxImpact = helper.topApps.map(\.energyImpact).max() ?? 1
-            ForEach(helper.topApps) { app in
+            // Scale bars against the visible set so the top visible row fills the bar.
+            let maxImpact = apps.map(\.energyImpact).max() ?? 1
+            ForEach(apps) { app in
                 AppRow(app: app, fraction: maxImpact > 0 ? app.energyImpact / maxImpact : 0,
                        onQuit: onQuit)
             }
@@ -47,7 +61,7 @@ struct PerAppView: View {
                     .buttonStyle(.borderedProminent)
                     .focusable(false)
                 if case .requiresApproval = helper.state {
-                    Button("Open Settings") { helper.openApprovalSettings() }
+                    Button(Strings.PerApp.openSettings) { helper.openApprovalSettings() }
                 }
             }
             .controlSize(.small)
@@ -57,11 +71,11 @@ struct PerAppView: View {
     private var explainerText: String {
         switch helper.state {
         case .requiresApproval:
-            return "Per-app drain needs the Onke helper. Approve it in System Settings, then retry."
+            return Strings.PerApp.requiresApproval
         case .failed:
-            return "Couldn't start the helper — hover for details."
+            return Strings.PerApp.failed
         default:
-            return "Per-app drain uses a small privileged helper to read powermetrics. It's off by default."
+            return Strings.PerApp.offByDefault
         }
     }
 
@@ -71,8 +85,8 @@ struct PerAppView: View {
     }
 
     private var explainerButtonTitle: String {
-        if case .requiresApproval = helper.state { return "Retry" }
-        return "Enable per-app drain"
+        if case .requiresApproval = helper.state { return Strings.PerApp.retry }
+        return Strings.PerApp.enable
     }
 }
 
@@ -82,15 +96,27 @@ private struct AppRow: View {
     let fraction: Double
     var onQuit: ((AppEnergy) -> Void)?
 
+    /// Critical processes (daemons / system) are locked and can't be quit here.
+    private var isCritical: Bool { ProcessCatalog.isCritical(app) }
+
     var body: some View {
         HStack(spacing: 8) {
             if let icon = app.icon {
                 Image(nsImage: icon).resizable().frame(width: 16, height: 16)
             } else {
-                Image(systemName: "app.dashed").frame(width: 16, height: 16)
+                Image(systemName: isCritical ? "gearshape.2" : "app.dashed")
+                    .frame(width: 16, height: 16)
                     .foregroundStyle(.secondary)
             }
-            Text(app.name).font(.caption).lineLimit(1)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(app.name).font(.caption).lineLimit(1)
+                    .textSelection(.enabled)
+                if let desc = ProcessCatalog.describe(app) {
+                    Text(desc).font(.system(size: 9)).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+            }
             Spacer(minLength: 4)
             GeometryReader { geo in
                 // Data viz, not a control — mint, never the interactive blue.
@@ -103,13 +129,21 @@ private struct AppRow: View {
             Text(String(format: "%.0f", app.energyImpact))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
-            if let onQuit {
+            // `isCritical` is the single lock authority: critical → 🔒 (no Quit),
+            // non-critical → Quit button. No secondary gate, so a non-critical row always
+            // shows its control.
+            if isCritical {
+                Image(systemName: "lock.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .help(Strings.PerApp.systemProtectedHelp)
+            } else if let onQuit {
                 Button {
                     onQuit(app)
                 } label: { Image(systemName: "xmark.circle") }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .help("Quit \(app.name)")
+                    .help(Strings.PerApp.quitHelp(app: app.name))
             }
         }
     }
